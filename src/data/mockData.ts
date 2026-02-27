@@ -1,0 +1,146 @@
+import { Campaign } from '@/types/campaign';
+
+const now = Date.now();
+const DAY = 86400000;
+
+export const mockCampaigns: Campaign[] = [
+  {
+    id: '1',
+    owner: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38',
+    title: 'DeFi Lending Protocol for Unbanked Communities',
+    description: 'Building a decentralized lending protocol that enables micro-loans for communities without access to traditional banking. Smart contracts ensure fair interest rates and transparent fund management.',
+    category: 'defi',
+    target: '50',
+    deadline: now + 14 * DAY,
+    amountCollected: '32.5',
+    withdrawn: false,
+    verified: true,
+    imageUrl: '',
+    milestones: [
+      { id: 1, title: 'Smart Contract Audit', amount: '15', approved: true, approvalCount: 3, requiredApprovals: 3 },
+      { id: 2, title: 'Beta Launch', amount: '20', approved: false, approvalCount: 1, requiredApprovals: 3 },
+      { id: 3, title: 'Full Deployment', amount: '15', approved: false, approvalCount: 0, requiredApprovals: 3 },
+    ],
+    donors: [
+      { donor: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B', amount: '10', timestamp: now - 3 * DAY, txHash: '0xabc123...def456' },
+      { donor: '0x1234567890123456789012345678901234567890', amount: '5.5', timestamp: now - 2 * DAY, txHash: '0xfed789...abc012' },
+      { donor: '0x9876543210987654321098765432109876543210', amount: '8', timestamp: now - DAY, txHash: '0x456def...789abc' },
+      { donor: '0xDeaDBeefDeAdBeefDeAdBeefDeAdBeefDeAdBeeF', amount: '9', timestamp: now - DAY / 2, txHash: '0x789abc...123def' },
+    ],
+  },
+  {
+    id: '2',
+    owner: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B',
+    title: 'NFT Marketplace for Digital Artists in Africa',
+    description: 'Creating a gas-optimized NFT marketplace specifically designed for emerging digital artists across Africa, with built-in royalty management and cross-chain support.',
+    category: 'nft',
+    target: '25',
+    deadline: now + 7 * DAY,
+    amountCollected: '18.2',
+    withdrawn: false,
+    verified: true,
+    imageUrl: '',
+    milestones: [
+      { id: 1, title: 'MVP Contract Deploy', amount: '10', approved: true, approvalCount: 3, requiredApprovals: 3 },
+      { id: 2, title: 'Frontend Launch', amount: '15', approved: false, approvalCount: 2, requiredApprovals: 3 },
+    ],
+    donors: [
+      { donor: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38', amount: '8.2', timestamp: now - 5 * DAY, txHash: '0xaaa111...bbb222' },
+      { donor: '0xDeaDBeefDeAdBeefDeAdBeefDeAdBeefDeAdBeeF', amount: '10', timestamp: now - 2 * DAY, txHash: '0xccc333...ddd444' },
+    ],
+  },
+  {
+    id: '3',
+    owner: '0x1234567890123456789012345678901234567890',
+    title: 'Blockchain-Based Education Credentials',
+    description: 'Verifiable on-chain education credentials that cannot be forged. Students own their achievements forever on the blockchain.',
+    category: 'education',
+    target: '15',
+    deadline: now + 21 * DAY,
+    amountCollected: '3.8',
+    withdrawn: false,
+    verified: false,
+    imageUrl: '',
+    milestones: [
+      { id: 1, title: 'Prototype', amount: '5', approved: false, approvalCount: 0, requiredApprovals: 3 },
+      { id: 2, title: 'Pilot Program', amount: '5', approved: false, approvalCount: 0, requiredApprovals: 3 },
+      { id: 3, title: 'Scale', amount: '5', approved: false, approvalCount: 0, requiredApprovals: 3 },
+    ],
+    donors: [
+      { donor: '0x9876543210987654321098765432109876543210', amount: '3.8', timestamp: now - DAY, txHash: '0xeee555...fff666' },
+    ],
+  },
+  {
+    id: '4',
+    owner: '0x9876543210987654321098765432109876543210',
+    title: 'Play-to-Earn Gaming Guild DAO',
+    description: 'A DAO-governed gaming guild that pools resources to onboard new players into Web3 gaming, with transparent profit sharing via smart contracts.',
+    category: 'gaming',
+    target: '100',
+    deadline: now + 30 * DAY,
+    amountCollected: '67.3',
+    withdrawn: false,
+    verified: true,
+    imageUrl: '',
+    milestones: [
+      { id: 1, title: 'Guild Setup', amount: '30', approved: true, approvalCount: 5, requiredApprovals: 3 },
+      { id: 2, title: 'Player Onboarding', amount: '40', approved: false, approvalCount: 2, requiredApprovals: 3 },
+      { id: 3, title: 'Tournament Launch', amount: '30', approved: false, approvalCount: 0, requiredApprovals: 3 },
+    ],
+    donors: [
+      { donor: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38', amount: '20', timestamp: now - 10 * DAY, txHash: '0x111aaa...222bbb' },
+      { donor: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B', amount: '15', timestamp: now - 7 * DAY, txHash: '0x333ccc...444ddd' },
+      { donor: '0xDeaDBeefDeAdBeefDeAdBeefDeAdBeefDeAdBeeF', amount: '32.3', timestamp: now - 3 * DAY, txHash: '0x555eee...666fff' },
+    ],
+  },
+  {
+    id: '5',
+    owner: '0xDeaDBeefDeAdBeefDeAdBeefDeAdBeefDeAdBeeF',
+    title: 'Clean Water DAO — Transparent Charity',
+    description: 'Every donation tracked on-chain. Milestone-based fund release ensures donated ETH directly funds water well construction in developing nations.',
+    category: 'charity',
+    target: '75',
+    deadline: now + 45 * DAY,
+    amountCollected: '12.1',
+    withdrawn: false,
+    verified: true,
+    imageUrl: '',
+    milestones: [
+      { id: 1, title: 'Site Survey', amount: '10', approved: true, approvalCount: 3, requiredApprovals: 3 },
+      { id: 2, title: 'Well Construction', amount: '40', approved: false, approvalCount: 0, requiredApprovals: 3 },
+      { id: 3, title: 'Maintenance Fund', amount: '25', approved: false, approvalCount: 0, requiredApprovals: 3 },
+    ],
+    donors: [
+      { donor: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38', amount: '5', timestamp: now - 2 * DAY, txHash: '0x777ggg...888hhh' },
+      { donor: '0x1234567890123456789012345678901234567890', amount: '7.1', timestamp: now - DAY, txHash: '0x999iii...000jjj' },
+    ],
+  },
+  {
+    id: '6',
+    owner: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38',
+    title: 'Decentralized Social Graph Protocol',
+    description: 'Open-source social graph on Polygon — own your connections, followers, and content. No platform lock-in, fully portable identity.',
+    category: 'social',
+    target: '40',
+    deadline: now - 2 * DAY,
+    amountCollected: '28.4',
+    withdrawn: false,
+    verified: false,
+    imageUrl: '',
+    milestones: [
+      { id: 1, title: 'Protocol Design', amount: '15', approved: true, approvalCount: 3, requiredApprovals: 3 },
+      { id: 2, title: 'SDK Release', amount: '25', approved: false, approvalCount: 0, requiredApprovals: 3 },
+    ],
+    donors: [
+      { donor: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B', amount: '15', timestamp: now - 15 * DAY, txHash: '0xaaabbb...cccddd' },
+      { donor: '0x9876543210987654321098765432109876543210', amount: '13.4', timestamp: now - 10 * DAY, txHash: '0xeeeeff...ggghhh' },
+    ],
+  },
+];
+
+export const platformStats = {
+  totalCampaigns: 142,
+  totalRaised: '2,847.5',
+  totalDonors: 3891,
+  successRate: 78,
+};

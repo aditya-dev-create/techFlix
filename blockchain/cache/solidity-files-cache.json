@@ -1,0 +1,40 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/Users/adityayadav/Desktop/trusty-crowd-flow-main/blockchain/contracts/FundChain.sol": {
+      "lastModificationDate": 1772209297722,
+      "contentHash": "2293622e5b2b36fd90d78055b86d5816",
+      "sourceName": "contracts/FundChain.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "FundChain"
+      ]
+    }
+  }
+}
