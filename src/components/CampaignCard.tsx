@@ -1,77 +1,103 @@
 import { Link } from 'react-router-dom';
-import { Campaign, CATEGORY_LABELS } from '@/types/campaign';
-import { getProgress, getTimeRemaining, formatEth, formatAddress } from '@/lib/web3Utils';
-import { Clock, Users, BadgeCheck, TrendingUp } from 'lucide-react';
+import { Campaign } from '@/types/campaign';
+import { ShieldCheck, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { formatEth } from '@/lib/web3Utils';
+import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 
-export default function CampaignCard({ campaign }: { campaign: Campaign }) {
-  const progress = getProgress(campaign.amountCollected, campaign.target);
-  const time = getTimeRemaining(campaign.deadline);
+interface CampaignCardProps {
+  campaign: Campaign;
+}
+
+export default function CampaignCard({ campaign }: CampaignCardProps) {
+  const { t } = useTranslation();
+  const [imgError, setImgError] = useState(false);
+  const { id, title, description, target, amountCollected, verified, owner, donors, blockchainId } = campaign;
+  const progress = Math.min(100, Math.round((Number(amountCollected || 0) / Number(target || 1)) * 100));
+
+  // Determine image source:
+  // 1. IPFS Hash
+  // 2. Picsum seeded fallback
+  const imgSrc = campaign.ipfsImageHash
+    ? `https://ipfs.io/ipfs/${campaign.ipfsImageHash}`
+    : `https://picsum.photos/seed/${id || blockchainId || 'default'}/600/400`;
 
   return (
     <Link
-      to={`/campaign/${campaign.id}`}
-      className="group block rounded-xl bg-card border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden hover:glow-primary"
+      to={`/campaign/${id}`}
+      className="group flex flex-col bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5 overflow-hidden glassmorphism"
     >
-      {/* Image placeholder */}
-      <div className="h-44 bg-secondary relative overflow-hidden">
-        <div className="absolute inset-0 grid-pattern opacity-50" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center animate-float">
-            <TrendingUp className="w-8 h-8 text-primary" />
-          </div>
-        </div>
-        {campaign.verified && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-full bg-accent/20 text-accent text-xs font-medium">
-            <BadgeCheck className="w-3 h-3" />
-            Verified
+      <div className="relative aspect-video w-full overflow-hidden bg-secondary">
+        {!imgError ? (
+          <img
+            src={imgSrc}
+            alt={title}
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+            <ImageIcon className="w-10 h-10 opacity-30" />
           </div>
         )}
-        <div className="absolute top-3 left-3 px-2 py-1 rounded-full bg-secondary text-muted-foreground text-xs font-medium">
-          {CATEGORY_LABELS[campaign.category]}
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-60" />
+
+        {verified && (
+          <div className="absolute top-3 right-3 bg-primary/90 text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg backdrop-blur-md">
+            <ShieldCheck className="w-3.5 h-3.5" /> {t('card.verified')}
+          </div>
+        )}
       </div>
 
-      <div className="p-5">
-        <h3 className="font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
-          {campaign.title}
-        </h3>
-        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
-          {campaign.description}
+      <div className="p-5 flex flex-col flex-1">
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <h3 className="font-bold text-lg text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+            {title}
+          </h3>
+        </div>
+
+        <p className="text-sm text-muted-foreground line-clamp-2 mb-6 leading-relaxed flex-1">
+          {description}
         </p>
 
-        {/* Progress bar */}
-        <div className="mb-3">
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-primary font-mono font-medium">{formatEth(campaign.amountCollected)} ETH</span>
-            <span className="text-muted-foreground font-mono">{formatEth(campaign.target)} ETH</span>
+        <div className="space-y-4 mt-auto">
+          {/* Progress Section */}
+          <div>
+            <div className="flex justify-between items-end mb-2">
+              <div className="text-2xl font-black font-mono tracking-tighter text-foreground drop-shadow-sm">
+                {formatEth(String(amountCollected || 0))} <span className="text-sm font-medium text-muted-foreground tracking-normal">ETH {t('card.raised')}</span>
+              </div>
+            </div>
+            <div className="h-2.5 bg-secondary rounded-full overflow-hidden shadow-inner w-full border border-border/20">
+              <div
+                className="h-full bg-primary/80 transition-all duration-700 rounded-full bg-gradient-to-r from-primary to-primary/80 relative"
+                style={{ width: `${progress}%` }}
+              >
+                <div className="absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-white/20 to-transparent flex items-center pr-1 truncate">
+                  <span className="text-[10px] items-center text-white/50 block font-bold w-full text-right">{progress}%</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground mt-2 font-medium">
+              <span>{t('card.of')} {formatEth(String(target))} ETH {t('card.goal')}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+                {donors?.length || 0} {t('card.donors')}
+              </span>
+            </div>
           </div>
-          <div className="h-2 bg-secondary rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="text-right text-xs text-muted-foreground mt-1">{progress.toFixed(0)}%</div>
-        </div>
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Users className="w-3 h-3" />
-            {campaign.donors.length} donors
+          <div className="flex items-center justify-between pt-4 border-t border-border/30">
+            <div className="flex items-center gap-2 text-xs">
+              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary">
+                {owner?.slice(2, 4).toUpperCase()}
+              </div>
+              <span className="font-mono text-muted-foreground">{owner?.slice(0, 6)}...{owner?.slice(-4)}</span>
+            </div>
+            <span className="font-semibold text-primary text-sm flex items-center gap-0.5 group-hover:gap-1.5 transition-all">
+              {t('card.view')} <ChevronRight className="w-4 h-4" />
+            </span>
           </div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {time.expired ? (
-              <span className="text-destructive">Expired</span>
-            ) : (
-              <span>{time.days}d {time.hours}h left</span>
-            )}
-          </div>
-        </div>
-
-        {/* Owner */}
-        <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground font-mono">
-          by {formatAddress(campaign.owner)}
         </div>
       </div>
     </Link>

@@ -1,5 +1,6 @@
 export interface Campaign {
   id: string;
+  blockchainId?: string | number;
   owner: string;
   title: string;
   description: string;
@@ -12,6 +13,7 @@ export interface Campaign {
   milestones: Milestone[];
   donors: Donation[];
   imageUrl: string;
+  ipfsImageHash?: string;
 }
 
 export interface Milestone {
@@ -30,7 +32,7 @@ export interface Donation {
   txHash: string;
 }
 
-export type CampaignCategory = 
+export type CampaignCategory =
   | 'defi'
   | 'nft'
   | 'gaming'

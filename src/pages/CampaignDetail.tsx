@@ -10,23 +10,25 @@ import { getProgress, getTimeRemaining, formatEth, formatAddress } from '@/lib/w
 import MilestoneTracker from '@/components/MilestoneTracker';
 import DonateModal from '@/components/DonateModal';
 import { Button } from '@/components/ui/button';
-import { BadgeCheck, Clock, Users, ExternalLink, ArrowLeft, Loader2 } from 'lucide-react';
+import { BadgeCheck, Clock, Users, ExternalLink, ArrowLeft, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 export default function CampaignDetail() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const [localCampaign, setLocalCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { signer, provider, address, refreshBalance, isConnected, connect } = useWallet();
+  const { signer, address, refreshBalance } = useWallet();
   const { toast } = useToast();
   const [showDonate, setShowDonate] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       if (!id) return;
       try {
         const data = await fetchCampaignById(id);
-        // Map backend data to UI structure
         const mapped = {
           ...data,
           target: data.targetAmount,
@@ -69,107 +71,139 @@ export default function CampaignDetail() {
   const progress = getProgress(campaign.amountCollected, campaign.target);
   const time = getTimeRemaining(campaign.deadline);
 
+  const imgSrc = campaign.ipfsImageHash
+    ? `https://ipfs.io/ipfs/${campaign.ipfsImageHash}`
+    : `https://picsum.photos/seed/${id || campaign.blockchainId || 'default'}/1200/600`;
+
   return (
-    <div className="min-h-screen pt-24 pb-16">
+    <div className="min-h-screen pt-24 pb-16 transition-colors duration-300">
       <div className="container mx-auto px-4 max-w-5xl">
-        <Link to="/explore" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
-          <ArrowLeft className="w-4 h-4" /> Back to campaigns
+        <Link to="/explore" className="inline-flex items-center gap-1.5 text-sm md:text-base font-medium text-muted-foreground hover:text-primary transition-colors mb-8">
+          <ArrowLeft className="w-4 h-4" /> {t('explore.title') || 'Back to campaigns'}
         </Link>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-8 md:gap-12">
           {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-8">
             {/* Header image */}
-            <div className="h-56 rounded-xl bg-secondary grid-pattern relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-t from-card/80 to-transparent" />
-              <div className="absolute bottom-4 left-4 flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-secondary text-muted-foreground text-xs font-medium">
-                  {CATEGORY_LABELS[campaign.category]}
+            <div className="relative aspect-[21/9] rounded-2xl bg-secondary overflow-hidden glassmorphism shadow-md border border-border/50 group">
+              {!imgError ? (
+                <img
+                  src={imgSrc}
+                  alt={campaign.title}
+                  onError={() => setImgError(true)}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                  <ImageIcon className="w-16 h-16 opacity-30" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent opacity-90" />
+              <div className="absolute bottom-5 left-5 flex items-center gap-3">
+                <span className="px-4 py-1.5 rounded-full bg-secondary/80 backdrop-blur-md border border-border/50 text-foreground text-xs font-bold uppercase tracking-wider shadow-sm">
+                  {CATEGORY_LABELS[campaign.category as keyof typeof CATEGORY_LABELS]}
                 </span>
                 {campaign.verified && (
-                  <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-accent/20 text-accent text-xs font-medium">
-                    <BadgeCheck className="w-3 h-3" /> Verified
+                  <span className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary/20 backdrop-blur-md border border-primary/30 text-primary text-xs font-bold uppercase tracking-wider shadow-sm">
+                    <BadgeCheck className="w-4 h-4" /> {t('card.verified') || 'Verified'}
                   </span>
                 )}
               </div>
             </div>
 
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-3">{campaign.title}</h1>
-              <p className="text-muted-foreground leading-relaxed">{campaign.description}</p>
+              <h1 className="text-3xl md:text-5xl font-black text-foreground mb-4 leading-tight tracking-tight">{campaign.title}</h1>
+              <p className="text-lg text-muted-foreground leading-relaxed whitespace-pre-wrap">{campaign.description}</p>
             </div>
 
             {/* Milestones */}
-            <div className="rounded-xl bg-card border border-border p-6">
-              <MilestoneTracker milestones={campaign.milestones} />
+            <div className="rounded-3xl bg-card border border-border/50 p-6 md:p-8 glassmorphism shadow-sm">
+              <MilestoneTracker milestones={campaign.milestones} campaignId={campaign.blockchainId} isOwner={address?.toLowerCase() === campaign.owner.toLowerCase()} />
             </div>
 
             {/* Donation History */}
-            <div className="rounded-xl bg-card border border-border p-6">
-              <h3 className="text-sm font-semibold text-foreground mb-4">Donation History</h3>
-              <div className="space-y-3">
-                {campaign.donors.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                    <div>
-                      <span className="text-sm font-mono text-foreground">{formatAddress(d.donor)}</span>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(d.timestamp).toLocaleDateString()}
+            <div className="rounded-3xl bg-card border border-border/50 p-6 md:p-8 glassmorphism shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-6 flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" /> Donation History
+              </h3>
+              <div className="space-y-4">
+                {campaign.donors.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground bg-secondary/30 rounded-xl border border-border/50">
+                    No donations yet. Be the first!
+                  </div>
+                ) : (
+                  campaign.donors.map((d: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:border-primary/30 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                          {d.donor.slice(2, 4).toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="text-sm font-bold text-foreground font-mono">{formatAddress(d.donor)}</span>
+                          <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+                            {new Date(d.timestamp).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-base font-bold text-primary font-mono">{d.amount} ETH</span>
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${d.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary mt-1 transition-colors justify-end"
+                        >
+                          View tx <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-mono text-primary font-medium">{d.amount} ETH</span>
-                      <a
-                        href={`https://sepolia.etherscan.io/tx/${d.txHash}`}
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5"
-                      >
-                        View tx <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <div className="rounded-xl bg-card border border-border p-6 sticky top-24">
+            <div className="rounded-3xl bg-card border border-border/50 p-6 md:p-8 sticky top-24 glassmorphism shadow-lg shadow-primary/5">
               {/* Progress */}
-              <div className="mb-4">
-                <div className="text-3xl font-bold text-foreground font-mono">
-                  {formatEth(campaign.amountCollected)} <span className="text-lg text-muted-foreground">ETH</span>
+              <div className="mb-6">
+                <div className="text-4xl font-black text-foreground font-mono tracking-tighter mb-1">
+                  {formatEth(campaign.amountCollected)} <span className="text-xl text-muted-foreground tracking-normal">ETH</span>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  raised of {formatEth(campaign.target)} ETH goal
+                <div className="text-sm font-medium text-muted-foreground">
+                  {t('card.raised')} {t('card.of')} {formatEth(campaign.target)} ETH {t('card.goal')}
                 </div>
               </div>
 
-              <div className="h-3 bg-secondary rounded-full overflow-hidden mb-2">
+              <div className="h-4 bg-secondary/50 rounded-full overflow-hidden mb-3 shadow-inner border border-border/50">
                 <div
-                  className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
+                  className="h-full bg-gradient-to-r from-primary via-primary to-accent rounded-full transition-all duration-1000 ease-out relative"
                   style={{ width: `${progress}%` }}
-                />
-              </div>
-              <div className="text-sm text-primary font-medium mb-6">{progress.toFixed(1)}% funded</div>
-
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="text-center p-3 rounded-lg bg-secondary">
-                  <Users className="w-4 h-4 mx-auto text-muted-foreground mb-1" />
-                  <div className="text-lg font-bold text-foreground">{campaign.donors.length}</div>
-                  <div className="text-xs text-muted-foreground">Donors</div>
+                >
+                  <div className="absolute top-0 right-0 bottom-0 w-10 bg-gradient-to-l from-white/30 to-transparent"></div>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-secondary">
-                  <Clock className="w-4 h-4 mx-auto text-muted-foreground mb-1" />
+              </div>
+              <div className="text-sm font-bold text-primary mb-8">{progress.toFixed(1)}% funded</div>
+
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="text-center p-4 rounded-2xl bg-secondary/50 border border-border/50">
+                  <Users className="w-5 h-5 mx-auto text-primary mb-2" />
+                  <div className="text-xl font-black text-foreground">{campaign.donors.length}</div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('card.donors')}</div>
+                </div>
+                <div className="text-center p-4 rounded-2xl bg-secondary/50 border border-border/50">
+                  <Clock className="w-5 h-5 mx-auto text-accent mb-2" />
                   {time.expired ? (
                     <>
-                      <div className="text-lg font-bold text-destructive">Ended</div>
-                      <div className="text-xs text-muted-foreground">Expired</div>
+                      <div className="text-xl font-black text-destructive">Ended</div>
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expired</div>
                     </>
                   ) : (
                     <>
-                      <div className="text-lg font-bold text-foreground">{time.days}d {time.hours}h</div>
-                      <div className="text-xs text-muted-foreground">Remaining</div>
+                      <div className="text-xl font-black text-foreground">{time.days}d {time.hours}h</div>
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remaining</div>
                     </>
                   )}
                 </div>
@@ -178,23 +212,27 @@ export default function CampaignDetail() {
               <Button
                 onClick={() => setShowDonate(true)}
                 disabled={time.expired}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-primary h-12 text-base"
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-primary h-14 text-lg font-bold shadow-xl shadow-primary/20 transition-all hover:scale-[1.02]"
               >
                 {time.expired ? 'Campaign Ended' : 'Donate Now'}
               </Button>
 
-              <div className="mt-4 text-xs text-muted-foreground font-mono">
-                <div className="flex justify-between py-1">
+              <div className="mt-8 space-y-3 text-xs font-semibold text-muted-foreground font-mono bg-secondary/30 p-4 rounded-xl border border-border/50">
+                <div className="flex justify-between items-center">
                   <span>Contract</span>
-                  <span className="text-foreground">0x1a2b...3c4d</span>
+                  <a href={`https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
+                    {formatAddress(CONTRACT_ADDRESS)} <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
-                <div className="flex justify-between py-1">
+                <div className="flex justify-between items-center">
                   <span>Owner</span>
-                  <span className="text-foreground">{formatAddress(campaign.owner)}</span>
+                  <a href={`https://sepolia.etherscan.io/address/${campaign.owner}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
+                    {formatAddress(campaign.owner)} <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
-                <div className="flex justify-between py-1">
+                <div className="flex justify-between items-center">
                   <span>Network</span>
-                  <span className="text-foreground">Sepolia</span>
+                  <span className="text-foreground bg-background px-2 py-0.5 rounded-md border border-border">Sepolia / Local</span>
                 </div>
               </div>
             </div>
@@ -208,7 +246,7 @@ export default function CampaignDetail() {
           onClose={() => setShowDonate(false)}
           onDonate={async (amount) => {
             if (!signer || !address) {
-              toast({ title: 'Wallet not connected', description: 'Please connect your wallet to donate.' });
+              toast({ title: 'Wallet not connected', description: 'Please connect your wallet to donate.', variant: 'destructive' });
               return;
             }
 
@@ -216,10 +254,7 @@ export default function CampaignDetail() {
             if (num <= 0) return;
 
             try {
-              // 1. Blockchain Transaction
               const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
-
-              // We need the blockchainId (the index in the contract)
               const bId = campaign.blockchainId;
               if (bId === undefined || bId === null) {
                 toast({ title: 'System Error', description: 'This campaign is not properly linked to the blockchain.', variant: 'destructive' });
@@ -236,7 +271,6 @@ export default function CampaignDetail() {
               toast({ title: 'Transaction Sent', description: 'Waiting for blockchain confirmation...' });
               await tx.wait();
 
-              // 2. Sync with Backend
               await recordDonation({
                 campaignId: campaign.id,
                 wallet: address,
@@ -244,7 +278,6 @@ export default function CampaignDetail() {
                 txHash: tx.hash
               });
 
-              // 3. Update Local State
               const updated = { ...campaign };
               updated.amountCollected = (parseFloat(updated.amountCollected) + num).toString();
               const donorEntry = { donor: address, amount: amount, timestamp: Date.now(), txHash: tx.hash };
@@ -252,7 +285,6 @@ export default function CampaignDetail() {
               setLocalCampaign(updated);
 
               toast({ title: '🚀 Donation Successful!', description: `Thank you for donating ${amount} ETH!` });
-
               try { await refreshBalance?.(); } catch { }
               setShowDonate(false);
             } catch (e: any) {

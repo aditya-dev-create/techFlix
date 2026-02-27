@@ -25,6 +25,9 @@ interface WalletContextType {
     isConnecting: boolean;
     isInitializing: boolean;
     error: string | null;
+    smilePoints: number;
+    savingsBalance: number;
+    addSmilePoints: (points: number) => void;
     connect: () => Promise<void>;
     disconnect: () => void;
     refreshBalance: () => Promise<void>;
@@ -45,6 +48,20 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [isConnecting, setIsConnecting] = useState(false);
     const [isInitializing, setIsInitializing] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const [smilePoints, setSmilePoints] = useState(() => {
+        return parseInt(localStorage.getItem('smile_points') || '0', 10);
+    });
+
+    const savingsBalance = parseFloat((smilePoints * 0.0001).toFixed(4)); // 1 point = 0.0001 ETH conversion for display
+
+    const addSmilePoints = useCallback((points: number) => {
+        setSmilePoints(prev => {
+            const newPoints = prev + points;
+            localStorage.setItem('smile_points', newPoints.toString());
+            return newPoints;
+        });
+    }, []);
 
     // Load initial connection state from localStorage
     const [explicitlyConnected, setExplicitlyConnected] = useState(() => {
@@ -88,8 +105,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const connect = useCallback(async () => {
         setIsConnecting(true);
         setError(null);
-        const notifier = toast({ title: 'Connecting...', description: 'Approve connection in your wallet' });
+        let notifier: any = null;
         try {
+            notifier = toast({ title: 'Connecting...', description: 'Approve connection in your wallet' });
             if (!window || !window.ethereum) {
                 throw new Error('No web3 provider found. Install MetaMask.');
             }
@@ -98,11 +116,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
             const addr = await initConnection(web3Provider);
 
-            notifier.update({ id: notifier.id, title: 'Connected', description: addr });
+            if (notifier && notifier.update) {
+                notifier.update({ id: notifier.id, title: 'Connected', description: addr });
+            }
         } catch (err: any) {
             console.error('connect error', err);
             setError(err?.message || 'Failed to connect');
-            notifier.update({ id: notifier.id, title: 'Connection failed', description: err?.message || String(err) });
+            if (notifier && notifier.update) {
+                notifier.update({ id: notifier.id, title: 'Connection failed', description: err?.message || String(err), variant: 'destructive' });
+            }
             localStorage.removeItem('wallet_connected');
         } finally {
             setIsConnecting(false);
@@ -124,7 +146,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const checkAutoConnect = async () => {
             if (explicitlyConnected && window.ethereum) {
                 try {
-                    const web3Provider = new ethers.BrowserProvider(window.ethereum);
+                    const web3Provider = new ethers.BrowserProvider(window.ethereum as any);
                     const accounts = await web3Provider.listAccounts();
                     if (accounts.length > 0) {
                         await initConnection(web3Provider);
@@ -143,7 +165,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
         checkAutoConnect();
-    }, [initConnection, explicitlyConnected]); // Dependency on initConnection
+    }, [initConnection, explicitlyConnected]);
 
     const refreshBalance = useCallback(async () => {
         if (!provider || !wallet.address) return;
@@ -158,7 +180,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 disconnect();
             } else if (explicitlyConnected) {
                 setWallet(w => ({ ...w, address: accounts[0] }));
-                const currentProv = provider || new ethers.BrowserProvider(window.ethereum);
+                const currentProv = provider || new ethers.BrowserProvider(window.ethereum as any);
                 if (!provider) setProvider(currentProv);
                 fetchBalance(accounts[0], currentProv);
             }
@@ -168,17 +190,17 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const c = parseInt(chainIdHex, 16);
             setWallet(w => ({ ...w, chainId: c }));
             if (wallet.address) {
-                const currentProv = provider || new ethers.BrowserProvider(window.ethereum);
+                const currentProv = provider || new ethers.BrowserProvider(window.ethereum as any);
                 fetchBalance(wallet.address, currentProv);
             }
         };
 
-        window.ethereum.on('accountsChanged', handleAccounts);
-        window.ethereum.on('chainChanged', handleChain);
+        (window.ethereum as any).on('accountsChanged', handleAccounts);
+        (window.ethereum as any).on('chainChanged', handleChain);
 
         return () => {
-            window.ethereum.removeListener('accountsChanged', handleAccounts);
-            window.ethereum.removeListener('chainChanged', handleChain);
+            (window.ethereum as any).removeListener('accountsChanged', handleAccounts);
+            (window.ethereum as any).removeListener('chainChanged', handleChain);
         };
     }, [disconnect, fetchBalance, provider, wallet.address, explicitlyConnected]);
 
@@ -195,6 +217,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             isConnecting,
             isInitializing,
             error,
+            smilePoints,
+            savingsBalance,
+            addSmilePoints,
             connect,
             disconnect,
             refreshBalance,

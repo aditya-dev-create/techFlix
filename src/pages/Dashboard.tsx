@@ -7,13 +7,15 @@ import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { formatEth } from '@/lib/web3Utils';
 import { FUNDCHAIN_ABI, CONTRACT_ADDRESS } from '@/contracts/FundChain';
+import { useTranslation } from 'react-i18next';
 import {
   Wallet, TrendingUp, BarChart3, Activity, Loader2, AlertCircle, Plus,
-  ExternalLink, ShieldCheck, Download, Zap, Users, Copy, Check
+  ExternalLink, Copy, Check, Sparkles, HandCoins, Zap
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { address: userAddress, isConnected, isInitializing, balance, chainId } = useWallet();
+  const { t } = useTranslation();
+  const { address: userAddress, isConnected, isInitializing, balance, chainId, smilePoints, savingsBalance } = useWallet();
   const [data, setData] = useState<any>(null);
   const [contractBalance, setContractBalance] = useState<string | null>(null);
   const [totalCampaigns, setTotalCampaigns] = useState<number | null>(null);
@@ -85,7 +87,7 @@ export default function Dashboard() {
 
   const stats = [
     {
-      label: 'My Campaigns',
+      label: t('dashboard.myCampaigns') || 'My Campaigns',
       value: myCampaigns.length.toString(),
       icon: <BarChart3 className="w-5 h-5" />,
       color: 'text-primary',
@@ -93,7 +95,7 @@ export default function Dashboard() {
       sub: 'created on-chain',
     },
     {
-      label: 'Total Raised',
+      label: t('dashboard.totalRaised') || 'Total Raised',
       value: `${formatEth(totalRaised.toString())} ETH`,
       icon: <TrendingUp className="w-5 h-5" />,
       color: 'text-accent',
@@ -101,20 +103,36 @@ export default function Dashboard() {
       sub: 'across all campaigns',
     },
     {
-      label: 'Donations Made',
+      label: t('dashboard.donationsMade') || 'Donations Made',
       value: myDonations.length.toString(),
-      icon: <Wallet className="w-5 h-5" />,
+      icon: <HandCoins className="w-5 h-5" />,
       color: 'text-violet-400',
       bg: 'bg-violet-400/10',
       sub: 'campaigns backed',
     },
     {
-      label: 'ETH Donated',
+      label: t('dashboard.ethDonated') || 'ETH Donated',
       value: `${Number(totalDonated).toFixed(4)} ETH`,
       icon: <Activity className="w-5 h-5" />,
       color: 'text-amber-400',
       bg: 'bg-amber-400/10',
       sub: 'total contribution',
+    },
+    {
+      label: t('dashboard.savings') || 'Savings Wallet',
+      value: `$${(savingsBalance * 3500).toFixed(2)}`, // mocked conversion
+      icon: <Wallet className="w-5 h-5" />,
+      color: 'text-green-400',
+      bg: 'bg-green-400/10',
+      sub: 'Smile Points balance',
+    },
+    {
+      label: t('dashboard.smilePoints') || 'Smile Points',
+      value: smilePoints.toString(),
+      icon: <Sparkles className="w-5 h-5" />,
+      color: 'text-yellow-400',
+      bg: 'bg-yellow-400/10',
+      sub: 'earned by smiling',
     },
   ];
 

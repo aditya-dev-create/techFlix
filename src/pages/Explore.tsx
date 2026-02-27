@@ -3,8 +3,10 @@ import { fetchCampaigns } from '@/lib/api';
 import CampaignCard from '@/components/CampaignCard';
 import { CATEGORY_LABELS, CampaignCategory } from '@/types/campaign';
 import { Search, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Explore() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CampaignCategory | 'all'>('all');
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -32,36 +34,36 @@ export default function Explore() {
   });
 
   return (
-    <div className="min-h-screen pt-24 pb-16">
+    <div className="min-h-screen pt-24 pb-16 transition-colors duration-300">
       <div className="container mx-auto px-4">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Explore Campaigns</h1>
-        <p className="text-muted-foreground mb-8">Discover transparent, blockchain-verified projects</p>
+        <h1 className="text-4xl font-black tracking-tight text-foreground mb-3">{t('explore.title') || 'Explore Campaigns'}</h1>
+        <p className="text-lg text-muted-foreground mb-10 max-w-2xl">{t('explore.desc') || 'Discover verified initiatives making a real impact. All funds are secured by smart contracts.'}</p>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="flex flex-col md:flex-row gap-4 mb-10">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input
               type="text"
-              placeholder="Search campaigns..."
+              placeholder={t('explore.search') || 'Search campaigns by title or category...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-secondary border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-card border border-border/50 text-foreground text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all shadow-sm glassmorphism"
             />
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             <button
-              onClick={() => { console.debug('[Explore] Category set all'); setCategory('all'); }}
-              className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${category === 'all' ? 'bg-primary/10 text-primary border border-primary/30' : 'bg-secondary text-muted-foreground border border-border hover:text-foreground'
+              onClick={() => setCategory('all')}
+              className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${category === 'all' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-card text-muted-foreground border border-border/50 hover:border-primary/50 hover:text-foreground glassmorphism'
                 }`}
             >
-              All
+              {t('explore.all') || 'All Categories'}
             </button>
             {(Object.entries(CATEGORY_LABELS) as [CampaignCategory, string][]).map(([key, label]) => (
               <button
                 key={key}
-                onClick={() => { console.debug('[Explore] Category set', key); setCategory(key); }}
-                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${category === key ? 'bg-primary/10 text-primary border border-primary/30' : 'bg-secondary text-muted-foreground border border-border hover:text-foreground'
+                onClick={() => setCategory(key)}
+                className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${category === key ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-card text-muted-foreground border border-border/50 hover:border-primary/50 hover:text-foreground glassmorphism'
                   }`}
               >
                 {label}
@@ -71,13 +73,15 @@ export default function Explore() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="flex justify-center py-32">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground">No campaigns found</div>
+          <div className="text-center py-32 text-muted-foreground bg-card/50 rounded-2xl border border-border/50 border-dashed glassmorphism">
+            {t('explore.empty') || 'No campaigns found.'}
+          </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filtered.map((c: any) => (
               <CampaignCard key={c.id} campaign={{
                 ...c,
