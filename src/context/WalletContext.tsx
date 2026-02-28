@@ -13,6 +13,7 @@ interface WalletState {
     isConnected: boolean;
     chainId: number | null;
     balance: string | null;
+    ethToInr: number;
 }
 
 interface WalletContextType {
@@ -28,10 +29,13 @@ interface WalletContextType {
     smilePoints: number;
     savingsBalance: number;
     addSmilePoints: (points: number) => void;
+    deductSmilePoints: (points: number) => void;
     connect: () => Promise<void>;
     disconnect: () => void;
     refreshBalance: () => Promise<void>;
     shortenAddress: (addr?: string | null) => string;
+    ethToInr: number;
+    convertToInr: (ethAmount: string | number) => string;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -42,7 +46,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isConnected: false,
         chainId: null,
         balance: null,
+        ethToInr: 0,
     });
+    const [ethToInr, setEthToInr] = useState<number>(0);
     const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
     const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
     const [isConnecting, setIsConnecting] = useState(false);
@@ -53,11 +59,52 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return parseInt(localStorage.getItem('smile_points') || '0', 10);
     });
 
-    const savingsBalance = parseFloat((smilePoints * 0.0001).toFixed(4)); // 1 point = 0.0001 ETH conversion for display
+
+    // Fetch ETH to INR price
+    useEffect(() => {
+        const fetchPrice = async () => {
+            try {
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=inr');
+                const data = await response.json();
+                if (data.ethereum?.inr) {
+                    setEthToInr(data.ethereum.inr);
+                    console.log('ETH to INR rate fetched:', data.ethereum.inr);
+                }
+            } catch (error) {
+                console.error('Failed to fetch ETH price', error);
+                // Fallback price if API fails
+                setEthToInr(250000);
+            }
+        };
+        fetchPrice();
+        const interval = setInterval(fetchPrice, 60000); // Update every minute
+        return () => clearInterval(interval);
+    }, []);
+
+    const convertToInr = useCallback((ethAmount: string | number) => {
+        const eth = typeof ethAmount === 'string' ? parseFloat(ethAmount) : ethAmount;
+        if (isNaN(eth) || ethToInr === 0) return '₹0';
+        const inr = eth * ethToInr;
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            maximumFractionDigits: 0
+        }).format(inr);
+    }, [ethToInr]);
+
+    const savingsBalance = parseFloat((smilePoints * 0.0000008).toFixed(6));
 
     const addSmilePoints = useCallback((points: number) => {
         setSmilePoints(prev => {
             const newPoints = prev + points;
+            localStorage.setItem('smile_points', newPoints.toString());
+            return newPoints;
+        });
+    }, []);
+
+    const deductSmilePoints = useCallback((points: number) => {
+        setSmilePoints(prev => {
+            const newPoints = Math.max(0, prev - points);
             localStorage.setItem('smile_points', newPoints.toString());
             return newPoints;
         });
@@ -91,6 +138,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 isConnected: true,
                 chainId: Number(network.chainId),
                 balance: null,
+                ethToInr: ethToInr,
             });
             setExplicitlyConnected(true);
             localStorage.setItem('wallet_connected', 'true');
@@ -134,7 +182,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const disconnect = useCallback(() => {
         setProvider(null);
         setSigner(null);
-        setWallet({ address: null, isConnected: false, chainId: null, balance: null });
+        setWallet({ address: null, isConnected: false, chainId: null, balance: null, ethToInr: 0 });
         setError(null);
         setExplicitlyConnected(false);
         localStorage.removeItem('wallet_connected');
@@ -220,10 +268,13 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             smilePoints,
             savingsBalance,
             addSmilePoints,
+            deductSmilePoints,
             connect,
             disconnect,
             refreshBalance,
-            shortenAddress
+            shortenAddress,
+            ethToInr,
+            convertToInr
         }}>
             {children}
         </WalletContext.Provider>

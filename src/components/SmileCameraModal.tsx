@@ -69,7 +69,9 @@ export default function SmileCameraModal({ isOpen, onClose }: SmileCameraModalPr
         setTimeout(() => {
             const randomScore = Math.floor(Math.random() * 41) + 60; // 60 to 100
             setScore(randomScore);
-            setPoints(randomScore * 10);
+            // Map 60-100 score to 5-50 points
+            const adjustedPoints = Math.floor((randomScore - 60) * (45 / 40)) + 5;
+            setPoints(adjustedPoints);
             setDetecting(false);
         }, 2500);
     };

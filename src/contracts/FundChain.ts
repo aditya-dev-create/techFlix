@@ -6,10 +6,11 @@ export const FUNDCHAIN_ABI = [
     { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "donor", "type": "address" }, { "indexed": false, "name": "amount", "type": "uint256" }, { "indexed": false, "name": "totalCollected", "type": "uint256" }], "name": "DonationReceived", "type": "event" },
     { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "milestoneId", "type": "uint256" }, { "indexed": false, "name": "amount", "type": "uint256" }], "name": "FundsWithdrawn", "type": "event" },
     { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "milestoneId", "type": "uint256" }, { "indexed": false, "name": "approver", "type": "address" }], "name": "MilestoneApproved", "type": "event" },
-    { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "milestoneId", "type": "uint256" }, { "indexed": false, "name": "title", "type": "string" }, { "indexed": false, "name": "amount", "type": "uint256" }], "name": "MilestoneAdded", "type": "event" },
+    { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "milestoneId", "type": "uint256" }, { "indexed": false, "name": "title", "type": "string" }, { "indexed": false, "name": "amount", "type": "uint256" }, { "indexed": false, "name": "requiredApprovals", "type": "uint256" }], "name": "MilestoneAdded", "type": "event" },
     { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "signer", "type": "address" }, { "indexed": false, "name": "confirmations", "type": "uint256" }], "name": "MultiSigConfirmed", "type": "event" },
     { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "donor", "type": "address" }, { "indexed": false, "name": "amount", "type": "uint256" }], "name": "RefundIssued", "type": "event" },
     { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }], "name": "RefundsEnabled", "type": "event" },
+    { "anonymous": false, "inputs": [{ "indexed": true, "name": "campaignId", "type": "uint256" }, { "indexed": false, "name": "milestoneId", "type": "uint256" }, { "indexed": false, "name": "ipfsHash", "type": "string" }], "name": "MilestoneProofUploaded", "type": "event" },
     {
         "inputs": [
             { "name": "_title", "type": "string" },
@@ -78,4 +79,4 @@ export const FUNDCHAIN_ABI = [
 ];
 
 // ⚠️ Update this after redeploying!
-export const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+export const CONTRACT_ADDRESS = "0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8";

@@ -4,6 +4,7 @@ import { ShieldCheck, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { formatEth } from '@/lib/web3Utils';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
+import { useWallet } from '@/context/WalletContext';
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -11,6 +12,7 @@ interface CampaignCardProps {
 
 export default function CampaignCard({ campaign }: CampaignCardProps) {
   const { t } = useTranslation();
+  const { convertToInr } = useWallet();
   const [imgError, setImgError] = useState(false);
   const { id, title, description, target, amountCollected, verified, owner, donors, blockchainId } = campaign;
   const progress = Math.min(100, Math.round((Number(amountCollected || 0) / Number(target || 1)) * 100));
@@ -67,6 +69,7 @@ export default function CampaignCard({ campaign }: CampaignCardProps) {
               <div className="text-2xl font-black font-mono tracking-tighter text-foreground drop-shadow-sm">
                 {formatEth(String(amountCollected || 0))} <span className="text-sm font-medium text-muted-foreground tracking-normal">ETH {t('card.raised')}</span>
               </div>
+              <div className="text-[10px] text-muted-foreground font-mono font-bold mt-0.5">{convertToInr(amountCollected || 0)}</div>
             </div>
             <div className="h-2.5 bg-secondary rounded-full overflow-hidden shadow-inner w-full border border-border/20">
               <div
@@ -79,7 +82,7 @@ export default function CampaignCard({ campaign }: CampaignCardProps) {
               </div>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground mt-2 font-medium">
-              <span>{t('card.of')} {formatEth(String(target))} ETH {t('card.goal')}</span>
+              <span>{t('card.of')} {formatEth(String(target))} ETH ({convertToInr(target)}) {t('card.goal')}</span>
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
                 {donors?.length || 0} {t('card.donors')}

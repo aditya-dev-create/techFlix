@@ -15,7 +15,7 @@ export default function apiRouter(io: any) {
   router.use('/users', userRoutes());
   router.use('/ngos', ngoRoutes());
   router.use('/campaigns', campaignRoutes(io));
-  router.use('/donations', donationRoutes());
+  router.use('/donations', donationRoutes(io));
   router.use('/milestones', milestoneRoutes());
   router.use('/smile', smileRoutes());
   router.use('/admin', adminRoutes());

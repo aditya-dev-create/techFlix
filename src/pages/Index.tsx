@@ -1,14 +1,67 @@
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { ArrowRight, Shield, Eye, Coins, Blocks, Vote, FileText, Lock, Zap, ChevronRight } from 'lucide-react';
-import CampaignCard from '@/components/CampaignCard';
-import StatsBar, { defaultStats } from '@/components/StatsBar';
-import { mockCampaigns } from '@/data/mockData';
+import StatsBar from '@/components/StatsBar';
 import { useTranslation } from 'react-i18next';
+import { useEffect, useState } from 'react';
+import { fetchCampaigns } from '@/lib/api';
+import { Target, TrendingUp, Users, Award, ArrowRight, Shield, Eye, Coins, Blocks, Vote, FileText, Lock, Zap, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import CampaignCard from '@/components/CampaignCard';
+
+import { useSocket } from '@/context/SocketContext';
 
 export default function Index() {
   const { t } = useTranslation();
-  const featured = mockCampaigns.filter(c => c.verified).slice(0, 3);
+  const { socket } = useSocket();
+  const [featured, setFeatured] = useState<any[]>([]);
+  const [liveStats, setLiveStats] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+
+  const loadData = () => {
+    fetchCampaigns().then(data => {
+      setCampaigns(data);
+      // Process stats
+      const totalCampaigns = data.length;
+      let totalRaised = 0;
+      let totalDonors = 0;
+      let successCount = 0;
+
+      data.forEach((c: any) => {
+        totalRaised += parseFloat(c.amountCollected || '0');
+        totalDonors += (c.donations || []).length;
+        if (parseFloat(c.amountCollected || '0') >= parseFloat(c.targetAmount || '1')) {
+          successCount++;
+        }
+      });
+
+      const successRate = totalCampaigns > 0 ? Math.round((successCount / totalCampaigns) * 100) : 0;
+
+      setLiveStats([
+        { label: 'Campaigns', value: totalCampaigns.toString(), icon: <Target className="w-5 h-5" /> },
+        { label: 'ETH Raised', value: totalRaised.toFixed(2), icon: <TrendingUp className="w-5 h-5" /> },
+        { label: 'Donations', value: totalDonors.toString(), icon: <Users className="w-5 h-5" /> },
+        { label: 'Success Rate', value: `${successRate}%`, icon: <Award className="w-5 h-5" /> },
+      ]);
+
+      const liveFeatured = data.filter((c: any) => c.verified).slice(0, 3);
+      if (liveFeatured.length === 0) {
+        setFeatured(data.slice(0, 3));
+      } else {
+        setFeatured(liveFeatured);
+      }
+    }).catch(err => console.error(err));
+  };
+
+  useEffect(() => {
+    loadData();
+    if (socket) {
+      socket.on('CAMPAIGN_UPDATED', loadData);
+      socket.on('NEW_DONATION', loadData);
+      return () => {
+        socket.off('CAMPAIGN_UPDATED', loadData);
+        socket.off('NEW_DONATION', loadData);
+      };
+    }
+  }, [socket]);
 
   const features = [
     {
@@ -114,7 +167,14 @@ export default function Index() {
 
       {/* ───── STATS ───── */}
       <section className="container mx-auto px-4 -mt-8 relative z-20">
-        <StatsBar stats={defaultStats()} />
+        <StatsBar stats={
+          liveStats.length > 0 ? liveStats : [
+            { label: 'Campaigns', value: '-', icon: <Target className="w-5 h-5" /> },
+            { label: 'ETH Raised', value: '-', icon: <TrendingUp className="w-5 h-5" /> },
+            { label: 'Donations', value: '-', icon: <Users className="w-5 h-5" /> },
+            { label: 'Success Rate', value: '- %', icon: <Award className="w-5 h-5" /> },
+          ]
+        } />
       </section>
 
       {/* ───── HOW IT WORKS ───── */}
@@ -168,7 +228,15 @@ export default function Index() {
           </Link>
         </div>
         <div className="grid md:grid-cols-3 gap-6">
-          {featured.map(c => <CampaignCard key={c.id} campaign={c} />)}
+          {featured.map((c: any) => (
+            <CampaignCard key={c.id} campaign={{
+              ...c,
+              target: c.targetAmount,
+              owner: c.ngo?.wallet || c.ngoId,
+              donors: c.donations || [],
+              category: c.category || 'charity'
+            }} />
+          ))}
         </div>
       </section>
 

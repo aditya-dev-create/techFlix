@@ -37,3 +37,21 @@ export const recordDonation = async (donationData: { campaignId: string; wallet:
     if (!response.ok) throw new Error('Failed to record donation');
     return response.json();
 };
+export const releaseMilestone = async (data: { id: string; milestoneIndex: number }) => {
+    const response = await fetch(`${API_URL}/campaigns/release-milestone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to release milestone');
+    return response.json();
+};
+export const approveMilestonevirtually = async (data: { id: string; milestoneIndex: number }) => {
+    const response = await fetch(`${API_URL}/campaigns/approve-milestone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to approve milestone');
+    return response.json();
+};

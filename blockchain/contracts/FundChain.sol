@@ -61,10 +61,11 @@ contract FundChain {
     event RefundIssued(uint256 indexed campaignId, address donor, uint256 amount);
     event FundsWithdrawn(uint256 indexed campaignId, uint256 milestoneId, uint256 amount);
     event MilestoneApproved(uint256 indexed campaignId, uint256 milestoneId, address approver);
-    event MilestoneAdded(uint256 indexed campaignId, uint256 milestoneId, string title, uint256 amount);
+    event MilestoneAdded(uint256 indexed campaignId, uint256 milestoneId, string title, uint256 amount, uint256 requiredApprovals);
     event CampaignVerified(uint256 indexed campaignId, address admin);
     event MultiSigConfirmed(uint256 indexed campaignId, address signer, uint256 confirmations);
     event RefundsEnabled(uint256 indexed campaignId);
+    event MilestoneProofUploaded(uint256 indexed campaignId, uint256 milestoneId, string ipfsHash);
 
     // ─────────────────────────────────────────────────────────────────────
     //  MODIFIERS
@@ -189,7 +190,7 @@ contract FundChain {
         ms.amount            = _amount;
         ms.requiredApprovals = _requiredApprovals;
 
-        emit MilestoneAdded(_campaignId, milestoneId, _title, _amount);
+        emit MilestoneAdded(_campaignId, milestoneId, _title, _amount, _requiredApprovals);
     }
 
     /// @notice Donor approves a milestone (DAO voting)
@@ -198,7 +199,10 @@ contract FundChain {
         campaignExists(_campaignId)
     {
         require(donations[_campaignId][msg.sender] > 0, "Must be a donor to vote");
+        require(_milestoneId < campaigns[_campaignId].milestoneCount, "Invalid milestone ID");
+        
         Milestone storage ms = milestones[_campaignId][_milestoneId];
+        require(ms.requiredApprovals > 0, "Milestone not initialized");
         require(!ms.approvals[msg.sender], "Already voted");
         require(!ms.approved, "Milestone already approved");
 
@@ -219,6 +223,7 @@ contract FundChain {
         string memory _ipfsHash
     ) external campaignExists(_campaignId) onlyOwner(_campaignId) {
         milestones[_campaignId][_milestoneId].ipfsProofHash = _ipfsHash;
+        emit MilestoneProofUploaded(_campaignId, _milestoneId, _ipfsHash);
     }
 
     /// @notice Withdraw funds for an approved milestone
@@ -228,17 +233,40 @@ contract FundChain {
         onlyOwner(_campaignId)
     {
         Campaign storage c = campaigns[_campaignId];
-        require(c.amountCollected >= c.target || block.timestamp > c.deadline, "Fundraising ongoing");
+        // require(c.amountCollected >= c.target || block.timestamp > c.deadline, "Fundraising ongoing");
 
         Milestone storage ms = milestones[_campaignId][_milestoneId];
         require(ms.approved, "Milestone not yet approved by donors");
         require(!ms.fundsReleased, "Funds already released");
-        require(ms.amount <= address(this).balance, "Insufficient contract balance");
+        
+        uint256 balance = address(this).balance;
+        require(ms.amount <= balance, string(abi.encodePacked("Insufficient balance: ", _uintToString(ms.amount), " > ", _uintToString(balance))));
 
         ms.fundsReleased = true;
-        payable(c.owner).transfer(ms.amount);
+        (bool success, ) = payable(c.owner).call{value: ms.amount}("");
+        require(success, "Transfer failed");
 
         emit FundsWithdrawn(_campaignId, _milestoneId, ms.amount);
+    }
+
+    function _uintToString(uint256 _i) internal pure returns (string memory) {
+        if (_i == 0) return "0";
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k - 1;
+            uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            _i /= 10;
+        }
+        return string(bstr);
     }
 
     // ─────────────────────────────────────────────────────────────────────

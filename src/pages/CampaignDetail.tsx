@@ -13,35 +13,48 @@ import { Button } from '@/components/ui/button';
 import { BadgeCheck, Clock, Users, ExternalLink, ArrowLeft, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useSocket } from '@/context/SocketContext';
 
 export default function CampaignDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
   const [localCampaign, setLocalCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { signer, address, refreshBalance } = useWallet();
+  const { signer, address, refreshBalance, deductSmilePoints, convertToInr } = useWallet();
   const { toast } = useToast();
   const [showDonate, setShowDonate] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const { socket } = useSocket();
+
+  const mapCampaign = (data: any) => ({
+    ...data,
+    target: data.targetAmount,
+    owner: data.ngo?.wallet || data.ngoId,
+    donors: (data.donations || []).map((d: any) => ({
+      donor: d.wallet || d.user?.wallet || 'Unknown',
+      amount: d.amount,
+      timestamp: new Date(d.timestamp).getTime(),
+      txHash: d.txHash
+    })),
+    category: data.category || 'charity'
+  });
+
+  useEffect(() => {
+    if (!socket || !id) return;
+    socket.on('CAMPAIGN_UPDATED', (updated: any) => {
+      if (updated.id === id || updated.blockchainId === localCampaign?.blockchainId) {
+        setLocalCampaign(mapCampaign(updated));
+      }
+    });
+    return () => { socket.off('CAMPAIGN_UPDATED'); };
+  }, [socket, id, localCampaign?.blockchainId]);
 
   useEffect(() => {
     const load = async () => {
       if (!id) return;
       try {
         const data = await fetchCampaignById(id);
-        const mapped = {
-          ...data,
-          target: data.targetAmount,
-          owner: data.ngo?.wallet || data.ngoId,
-          donors: (data.donations || []).map((d: any) => ({
-            donor: d.wallet || d.user?.wallet || 'Unknown',
-            amount: d.amount,
-            timestamp: new Date(d.timestamp).getTime(),
-            txHash: d.txHash
-          })),
-          category: data.category || 'charity'
-        };
-        setLocalCampaign(mapped);
+        setLocalCampaign(mapCampaign(data));
       } catch (err) {
         console.error('Failed to load campaign', err);
       } finally {
@@ -169,12 +182,14 @@ export default function CampaignDetail() {
             <div className="rounded-3xl bg-card border border-border/50 p-6 md:p-8 sticky top-24 glassmorphism shadow-lg shadow-primary/5">
               {/* Progress */}
               <div className="mb-6">
-                <div className="text-4xl font-black text-foreground font-mono tracking-tighter mb-1">
-                  {formatEth(campaign.amountCollected)} <span className="text-xl text-muted-foreground tracking-normal">ETH</span>
+                <div className="text-3xl font-black text-foreground font-mono tracking-tighter">
+                  {formatEth(campaign.amountCollected)} <span className="text-lg font-medium text-muted-foreground tracking-normal uppercase">ETH {t('card.raised')}</span>
                 </div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  {t('card.raised')} {t('card.of')} {formatEth(campaign.target)} ETH {t('card.goal')}
-                </div>
+                <div className="text-sm font-bold text-muted-foreground font-mono mt-1">{convertToInr(campaign.amountCollected)}</div>
+              </div>
+              <div className="flex justify-between text-sm font-semibold text-muted-foreground mb-4 font-mono">
+                <span>{((campaign.amountCollected / campaign.target) * 100).toFixed(1)}%</span>
+                <span>{t('card.of')} {formatEth(campaign.target)} ETH ({convertToInr(campaign.target)}) {t('card.goal')}</span>
               </div>
 
               <div className="h-4 bg-secondary/50 rounded-full overflow-hidden mb-3 shadow-inner border border-border/50">
@@ -244,8 +259,8 @@ export default function CampaignDetail() {
         <DonateModal
           campaignTitle={campaign.title}
           onClose={() => setShowDonate(false)}
-          onDonate={async (amount) => {
-            if (!signer || !address) {
+          onDonate={async (amount, mode) => {
+            if (!address) {
               toast({ title: 'Wallet not connected', description: 'Please connect your wallet to donate.', variant: 'destructive' });
               return;
             }
@@ -254,37 +269,61 @@ export default function CampaignDetail() {
             if (num <= 0) return;
 
             try {
-              const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
-              const bId = campaign.blockchainId;
-              if (bId === undefined || bId === null) {
-                toast({ title: 'System Error', description: 'This campaign is not properly linked to the blockchain.', variant: 'destructive' });
-                return;
+              let txHash = '';
+
+              if (mode === 'wallet') {
+                if (!signer) {
+                  toast({ title: 'Wallet error', description: 'No signer found. Try reconnecting your wallet.', variant: 'destructive' });
+                  return;
+                }
+
+                const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
+                const bIdString = campaign.blockchainId;
+                if (bIdString === undefined || bIdString === null) {
+                  toast({ title: 'Link error', description: 'This campaign is not linked to blockchain.', variant: 'destructive' });
+                  return;
+                }
+
+                // Ensure bId is BigInt for ethers v6
+                const bId = BigInt(bIdString);
+
+                toast({ title: 'MetaMask Request', description: `Please confirm the ${amount} ETH donation in your wallet.` });
+                const tx = await contract.donate(bId, {
+                  value: ethers.parseEther(num.toString()),
+                  gasLimit: 500000
+                });
+
+                toast({ title: 'Transaction Sent', description: 'Waiting for blockchain confirmation...' });
+                await tx.wait();
+                txHash = tx.hash;
+              } else {
+                // Smile Donation Flow
+                const pointsNeeded = Math.round(num * 1250000); // 1 ETH = 1,250,000 points
+
+                toast({ title: 'Processing Smile Donation', description: `Converting ${pointsNeeded.toLocaleString()} Smile Coins to ${amount} ETH` });
+
+                // Generate a virtual txHash
+                txHash = `smile_${Date.now()}_${address.toLowerCase()}`;
               }
 
-              toast({ title: 'MetaMask Request', description: `Donating ${amount} ETH to "${campaign.title}"` });
-
-              const tx = await contract.donate(bId, {
-                value: ethers.parseEther(num.toString()),
-                gasLimit: 500000
-              });
-
-              toast({ title: 'Transaction Sent', description: 'Waiting for blockchain confirmation...' });
-              await tx.wait();
-
-              await recordDonation({
+              const { campaign: updatedData } = await recordDonation({
                 campaignId: campaign.id,
                 wallet: address,
                 amount: num,
-                txHash: tx.hash
+                txHash: txHash
               });
 
-              const updated = { ...campaign };
-              updated.amountCollected = (parseFloat(updated.amountCollected) + num).toString();
-              const donorEntry = { donor: address, amount: amount, timestamp: Date.now(), txHash: tx.hash };
-              updated.donors = [donorEntry, ...updated.donors];
-              setLocalCampaign(updated);
+              if (mode === 'smile') {
+                // Deduct points after successful DB update
+                const pointsNeeded = Math.round(num * 1000000);
+                deductSmilePoints(pointsNeeded);
+              }
 
-              toast({ title: '🚀 Donation Successful!', description: `Thank you for donating ${amount} ETH!` });
+              if (updatedData) {
+                setLocalCampaign(mapCampaign(updatedData));
+              }
+
+              toast({ title: mode === 'smile' ? '🌟 Smile Contribution Successful!' : '🚀 Donation Successful!', description: `Thank you for donating ${amount} ETH!` });
               try { await refreshBalance?.(); } catch { }
               setShowDonate(false);
             } catch (e: any) {

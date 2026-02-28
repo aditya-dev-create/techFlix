@@ -76,14 +76,17 @@ model Donation {
 }
 
 model Milestone {
-  id          String   @id @default(cuid())
-  campaignId  String
-  title       String
-  amount      Decimal  @db.Decimal(30, 8)
-  approved    Boolean  @default(false)
-  approvals   Int      @default(0)
-  proofIpfs   String?
-  createdAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  campaignId        String
+  milestoneIndex    Int      @default(0)
+  title             String
+  amount            Decimal  @db.Decimal(30, 8)
+  approved          Boolean  @default(false)
+  fundsReleased     Boolean  @default(false)
+  approvals         Int      @default(0)
+  requiredApprovals Int      @default(1)
+  proofIpfs         String?
+  createdAt         DateTime @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id])
 }

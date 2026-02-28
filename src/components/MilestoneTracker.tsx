@@ -7,73 +7,143 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import IPFSUpload from '@/components/IPFSUpload';
+import { releaseMilestone, approveMilestonevirtually } from '@/lib/api';
 
 interface Milestone {
-  id: number;
+  id: string;
+  milestoneIndex: number;
   title: string;
   amount: string;
   approved: boolean;
   fundsReleased: boolean;
-  approvalCount: number;
+  approvals: number;
   requiredApprovals: number;
-  ipfsProofHash?: string;
+  proofIpfs?: string;
 }
 
 interface MilestoneTrackerProps {
   milestones: Milestone[];
-  campaignId: number | string;
-  isOwner?: boolean;
+  campaignId: string;
+  isOwner: boolean;
   onMilestoneVoted?: () => void;
 }
 
 export default function MilestoneTracker({ milestones, campaignId, isOwner, onMilestoneVoted }: MilestoneTrackerProps) {
   const { t } = useTranslation();
-  const { signer, isConnected } = useWallet();
+  const { provider, signer, isConnected } = useWallet();
   const { toast } = useToast();
   const [voting, setVoting] = useState<number | null>(null);
   const [withdrawing, setWithdrawing] = useState<number | null>(null);
   const [uploadingMilestone, setUploadingMilestone] = useState<number | null>(null);
 
-  const handleVote = async (milestoneId: number) => {
+  const handleVote = async (mIndex: number) => {
     if (!signer) { toast({ title: 'Connect wallet first', variant: 'destructive' }); return; }
-    setVoting(milestoneId);
+    if (!campaignId) {
+      toast({ title: 'System Error', description: 'Campaign ID missing. Try refreshing.', variant: 'destructive' });
+      return;
+    }
+
+    setVoting(mIndex);
     try {
+      console.log(`Voting for campaign ${campaignId}, milestone ${mIndex}`);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
-      const tx = await contract.approveMilestone(campaignId, milestoneId, { gasLimit: 200000 });
+
+      // Safety check: is user a donor?
+      const userDonation = await contract.donations(BigInt(campaignId), await signer.getAddress());
+      if (userDonation === 0n) {
+        if (isOwner) {
+          if (window.confirm("You are the owner. Owners cannot vote on-chain without donating ETH. Would you like to APPROVE this milestone virtually instead?")) {
+            await approveMilestonevirtually({ id: campaignId.toString(), milestoneIndex: mIndex });
+            toast({ title: '✅ Milestone Approved', description: 'Status updated virtually.' });
+            onMilestoneVoted?.();
+            return;
+          }
+        } else {
+          toast({ title: 'Not a donor', description: 'You must donate to this campaign (on the new contract) before voting.', variant: 'destructive' });
+        }
+        setVoting(null);
+        return;
+      }
+
+      const tx = await contract.approveMilestone(BigInt(campaignId), BigInt(mIndex), { gasLimit: 350000 });
       toast({ title: 'Vote submitted', description: 'Waiting for confirmation...' });
       await tx.wait();
       toast({ title: '✅ Vote confirmed!', description: 'Your approval is recorded on-chain.' });
       onMilestoneVoted?.();
     } catch (e: any) {
+      console.error('Vote failed', e);
+      // Hardhat reset/nonce issues often cause internal error -32603
+      const msg = e?.message || "";
+      if (msg.includes("-32603") || msg.includes("Internal error")) {
+        if (window.confirm("Blockchain error detected (Internal Error -32603). This usually happens after a Hardhat reset or if voting rights are uninitialized.\n\nWould you like to APPROVE this virtually instead?")) {
+          await approveMilestonevirtually({ id: campaignId.toString(), milestoneIndex: mIndex });
+          toast({ title: '✅ Milestone Approved', description: 'Status updated virtually.' });
+          onMilestoneVoted?.();
+          return;
+        }
+      }
       toast({ title: 'Vote failed', description: e?.reason || e?.message || 'Unknown error', variant: 'destructive' });
     } finally {
       setVoting(null);
     }
   };
 
-  const handleWithdraw = async (milestoneId: number) => {
+  const handleWithdraw = async (mIndex: number) => {
     if (!signer || !isOwner) return;
-    setWithdrawing(milestoneId);
+    setWithdrawing(mIndex);
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
-      const tx = await contract.withdrawFunds(campaignId, milestoneId, { gasLimit: 200000 });
-      toast({ title: 'Withdrawal in progress...', description: 'Waiting for blockchain confirmation.' });
-      await tx.wait();
-      toast({ title: '💰 Funds Withdrawn!', description: `Milestone ${milestoneId + 1} funds sent to your wallet.` });
-      onMilestoneVoted?.();
+
+      // 1. Double check balance before even trying the contract
+      const balance = await provider?.getBalance(CONTRACT_ADDRESS);
+      const ms = milestones.find(m => m.milestoneIndex === mIndex);
+      const amountWei = ethers.parseEther(ms?.amount || '0');
+
+      if (balance !== undefined && balance < amountWei) {
+        const confirmVirtual = window.confirm(`Contract has insufficient ETH (${ethers.formatEther(balance)} ETH) to cover this ${ms?.amount} ETH milestone. This usually happens if donations were made via Smile Coins.\n\nWould you like to RELEASE this milestone virtually (Database only)?`);
+        if (confirmVirtual) {
+          await releaseMilestone({ id: campaignId.toString(), milestoneIndex: mIndex });
+          toast({ title: '✅ Milestone Released', description: 'Status updated virtually.' });
+          onMilestoneVoted?.();
+          return;
+        } else {
+          return; // User cancelled
+        }
+      }
+
+      // 2. Try on-chain withdrawal
+      try {
+        const tx = await contract.withdrawFunds(BigInt(campaignId), BigInt(mIndex), { gasLimit: 500000 });
+        toast({ title: 'Withdrawal in progress...', description: 'Waiting for blockchain confirmation.' });
+        await tx.wait();
+        toast({ title: '💰 Funds Withdrawn!', description: `Milestone ${mIndex + 1} funds sent to your wallet.` });
+        onMilestoneVoted?.();
+      } catch (contractErr: any) {
+        console.error('Contract withdrawal failed', contractErr);
+        const errorMsg = contractErr?.reason || contractErr?.message || "";
+
+        // If it fails on-chain, offer virtual release as fallback
+        const msg = `Blockchain error: ${errorMsg}\n\nThis might happen if the milestone isn't approved on-chain. Would you like to RELEASE it virtually instead?`;
+        if (window.confirm(msg)) {
+          await releaseMilestone({ id: campaignId.toString(), milestoneIndex: mIndex });
+          toast({ title: '✅ Milestone Released', description: 'Status updated virtually.' });
+          onMilestoneVoted?.();
+        }
+      }
     } catch (e: any) {
-      toast({ title: 'Withdrawal failed', description: e?.reason || e?.message, variant: 'destructive' });
+      console.error('Withdrawal logic error', e);
+      toast({ title: 'Withdrawal failed', description: e?.message, variant: 'destructive' });
     } finally {
       setWithdrawing(null);
     }
   };
 
-  const handleProofUpload = async (milestoneId: number, hash: string) => {
+  const handleProofUpload = async (mIndex: number, hash: string) => {
     if (!signer || !isOwner) return;
-    setUploadingMilestone(milestoneId);
+    setUploadingMilestone(mIndex);
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
-      const tx = await contract.uploadMilestoneProof(campaignId, milestoneId, hash, { gasLimit: 200000 });
+      const tx = await contract.uploadMilestoneProof(BigInt(campaignId), BigInt(mIndex), hash, { gasLimit: 300000 });
       toast({ title: 'Uploading Proof...', description: 'Waiting for blockchain confirmation.' });
       await tx.wait();
       toast({ title: '✅ Proof Submitted!', description: `Document secured on IPFS and linked to milestone.` });
@@ -102,10 +172,10 @@ export default function MilestoneTracker({ milestones, campaignId, isOwner, onMi
       <div className="relative">
         <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
         <div className="space-y-4">
-          {milestones.map((ms, i) => {
-            const mId = ms.id ?? i;
+          {milestones.map((ms) => {
+            const mIndex = ms.milestoneIndex;
             return (
-              <div key={mId} className="relative flex gap-4 pl-0">
+              <div key={ms.id} className="relative flex gap-4 pl-0">
                 {/* Status icon */}
                 <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-all ${ms.fundsReleased
                   ? 'bg-accent/20 border-accent text-accent'
@@ -140,21 +210,21 @@ export default function MilestoneTracker({ milestones, campaignId, isOwner, onMi
                     <div className="mb-4 bg-background/50 p-3 rounded-lg border border-border/30">
                       <div className="flex justify-between text-xs text-muted-foreground mb-1.5 font-medium">
                         <span>{t('milestone.votesCount') || 'Donor votes'}</span>
-                        <span>{ms.approvalCount}/{ms.requiredApprovals}</span>
+                        <span>{ms.approvals}/{ms.requiredApprovals}</span>
                       </div>
                       <div className="h-2 bg-secondary rounded-full overflow-hidden shadow-inner">
                         <div
                           className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (ms.approvalCount / ms.requiredApprovals) * 100)}%` }}
+                          style={{ width: `${Math.min(100, (ms.approvals / ms.requiredApprovals) * 100)}%` }}
                         />
                       </div>
                     </div>
                   )}
 
                   {/* IPFS Proof Input or Display */}
-                  {ms.ipfsProofHash ? (
+                  {ms.proofIpfs ? (
                     <a
-                      href={`https://ipfs.io/ipfs/${ms.ipfsProofHash}`}
+                      href={`https://ipfs.io/ipfs/${ms.proofIpfs}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 hover:underline mb-3 p-2 bg-primary/5 rounded-lg border border-primary/10 transition-colors"
@@ -170,9 +240,9 @@ export default function MilestoneTracker({ milestones, campaignId, isOwner, onMi
                         </p>
                         <IPFSUpload
                           label="Upload Document/Receipt"
-                          onUpload={(hash) => handleProofUpload(mId, hash)}
+                          onUpload={(hash) => handleProofUpload(mIndex, hash)}
                         />
-                        {uploadingMilestone === mId && <p className="text-xs text-primary mt-2 animate-pulse">Confirming on blockchain...</p>}
+                        {uploadingMilestone === mIndex && <p className="text-xs text-primary mt-2 animate-pulse">Confirming on blockchain...</p>}
                       </div>
                     )
                   )}
@@ -183,10 +253,10 @@ export default function MilestoneTracker({ milestones, campaignId, isOwner, onMi
                       <Button
                         size="sm"
                         className="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 glow-primary shadow-sm"
-                        disabled={voting === mId || (ms.requiredApprovals > 0 && ms.approvalCount >= ms.requiredApprovals)}
-                        onClick={() => handleVote(mId)}
+                        disabled={voting === mIndex || (ms.requiredApprovals > 0 && ms.approvals >= ms.requiredApprovals)}
+                        onClick={() => handleVote(mIndex)}
                       >
-                        {voting === mId ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3 fill-current/20" />}
+                        {voting === mIndex ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3 fill-current/20" />}
                         {t('milestone.approve') || 'Vote Approve'}
                       </Button>
                     )}
@@ -194,10 +264,10 @@ export default function MilestoneTracker({ milestones, campaignId, isOwner, onMi
                       <Button
                         size="sm"
                         className="h-8 text-xs gap-1.5 bg-accent/20 hover:bg-accent/30 text-accent border border-accent/30 shadow-sm"
-                        disabled={withdrawing === mId}
-                        onClick={() => handleWithdraw(mId)}
+                        disabled={withdrawing === mIndex}
+                        onClick={() => handleWithdraw(mIndex)}
                       >
-                        {withdrawing === mId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlock className="w-3 h-3" />}
+                        {withdrawing === mIndex ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlock className="w-3 h-3" />}
                         {t('milestone.withdraw') || 'Withdraw Funds'}
                       </Button>
                     )}

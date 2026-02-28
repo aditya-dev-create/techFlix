@@ -71,6 +71,7 @@ export default function CreateCampaign() {
 
     setIsSubmitting(true);
     try {
+      console.log('Starting deployment process...');
       const contract = new ethers.Contract(CONTRACT_ADDRESS, FUNDCHAIN_ABI, signer);
       const targetWei = ethers.parseEther(form.target);
       const date = new Date(form.deadline);
@@ -78,6 +79,14 @@ export default function CreateCampaign() {
       const deadlineTimestamp = Math.floor(date.getTime() / 1000);
 
       const validSigners = multiSigners.filter(s => ethers.isAddress(s));
+      const validMilestones = milestones.filter(m => m.title && m.amount);
+
+      console.log('Deploying campaign to blockchain...', {
+        title: form.title,
+        targetWei: targetWei.toString(),
+        deadline: deadlineTimestamp,
+        signers: validSigners
+      });
 
       toast({ title: '🚀 Deploying to Blockchain', description: 'Confirm in MetaMask...' });
 
@@ -89,11 +98,13 @@ export default function CreateCampaign() {
         deadlineTimestamp,
         form.ipfsImageHash || '',
         validSigners,
-        { gasLimit: 500000 }
+        { gasLimit: 800000 }
       );
 
+      console.log('Transaction sent:', tx.hash);
       toast({ title: 'Transaction sent', description: 'Waiting for confirmation...' });
       const receipt = await tx.wait();
+      console.log('Transaction mined:', receipt);
 
       // Extract campaign ID from event
       const event = receipt.logs
@@ -101,9 +112,31 @@ export default function CreateCampaign() {
           try { return contract.interface.parseLog(log); } catch { return null; }
         })
         .find((e: any) => e?.name === 'CampaignCreated');
+
       const blockchainId = event ? Number(event.args[0]) : null;
+      console.log('Extracted blockchainId:', blockchainId);
+
+      if (blockchainId !== null && validMilestones.length > 0) {
+        toast({ title: '🔗 Adding Milestones...', description: `Please confirm ${validMilestones.length} milestone transactions.` });
+
+        for (let i = 0; i < validMilestones.length; i++) {
+          const m = validMilestones[i];
+          const msWei = ethers.parseEther(m.amount.toString());
+          const reqApprovals = parseInt(m.requiredApprovals) || 1;
+
+          console.log(`Adding milestone ${i}:`, { title: m.title, amount: msWei.toString(), approvals: reqApprovals });
+          try {
+            const msTx = await contract.addMilestone(blockchainId, m.title, msWei, reqApprovals, { gasLimit: 400000 });
+            await msTx.wait();
+          } catch (msErr: any) {
+            console.error(`Milestone ${i} upload failed`, msErr);
+            toast({ title: `Milestone ${i + 1} Failed`, description: 'Failed to add milestone to blockchain.', variant: 'destructive' });
+          }
+        }
+      }
 
       // Sync to backend
+      console.log('Syncing with backend...');
       toast({ title: '🔄 Syncing with backend...' });
       const campaignData = {
         title: form.title,
@@ -113,19 +146,24 @@ export default function CreateCampaign() {
         deadline: form.deadline,
         ngoId: userAddress,
         blockchainId: blockchainId?.toString(),
-        milestones: milestones
-          .filter(m => m.title && m.amount)
-          .map(m => ({ title: m.title, amount: parseFloat(m.amount) })),
+        milestones: validMilestones.map(m => ({
+          title: m.title,
+          amount: parseFloat(m.amount),
+          requiredApprovals: parseInt(m.requiredApprovals) || 1
+        })),
       };
-      await createCampaign(campaignData);
 
-      toast({ title: '✅ Campaign Live!', description: `Campaign #${blockchainId} is live on-chain!` });
+      const syncResult = await createCampaign(campaignData);
+      console.log('Backend sync successful:', syncResult);
+
+      toast({ title: '✅ Campaign Live!', description: `Campaign is successfully deployed!` });
       navigate('/explore');
     } catch (err: any) {
       console.error('Create campaign error:', err);
       let msg = err?.message || 'Unknown error';
       if (err?.code === 'ACTION_REJECTED') msg = 'Transaction rejected in MetaMask.';
       if (err?.message?.includes('Deadline')) msg = 'Deadline must be in the future.';
+      if (err?.message?.includes('network')) msg = 'Blockchain network error. Make sure Hardhat is running locally!';
       toast({ title: '❌ Deployment Failed', description: msg, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);

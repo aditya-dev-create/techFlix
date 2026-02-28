@@ -3,9 +3,10 @@ import { prisma } from '../index';
 import { logger } from '../utils/logger';
 
 export const donationController = {
-  createDonationRecord: async (req: Request, res: Response) => {
+  createDonationRecord: async (req: Request, res: Response, io?: any) => {
     try {
       const { campaignId, wallet, amount, txHash } = req.body;
+      const normalizedWallet = wallet.toLowerCase();
 
       if (!campaignId || !wallet || !amount || !txHash) {
         return res.status(400).json({ error: 'Missing donation details' });
@@ -17,8 +18,8 @@ export const donationController = {
         const donation = await tx.donation.create({
           data: {
             campaignId,
-            wallet,
-            amount,
+            wallet: normalizedWallet,
+            amount: amount.toString(),
             txHash,
           }
         });
@@ -30,16 +31,29 @@ export const donationController = {
             amountCollected: {
               increment: amount
             }
+          },
+          include: {
+            donations: {
+              orderBy: { timestamp: 'desc' }
+            },
+            ngo: true,
+            milestones: true
           }
         });
 
         // 3. Optional: Link to user if exists
-        const user = await tx.user.findUnique({ where: { wallet } });
+        const user = await tx.user.findUnique({ where: { wallet: normalizedWallet } });
         if (user) {
           await tx.donation.update({
             where: { id: donation.id },
             data: { userId: user.id }
           });
+        }
+
+        // Emit socket event if io is provided
+        if (io) {
+          io.emit('CAMPAIGN_UPDATED', campaign);
+          io.emit('NEW_DONATION', { campaignId, donation });
         }
 
         return { donation, campaign };

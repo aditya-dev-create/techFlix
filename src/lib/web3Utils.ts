@@ -2,8 +2,10 @@ export function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function formatEth(value: string): string {
-  const num = parseFloat(value);
+export function formatEth(value: string | number): string {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0.00';
+  if (num > 0 && num < 0.01) return num.toFixed(4);
   return num.toFixed(2);
 }
 
@@ -17,6 +19,14 @@ export function getTimeRemaining(deadline: number | string | Date): { days: numb
     minutes: Math.floor((diff % 3600000) / 60000),
     expired: false,
   };
+}
+
+export function formatInr(amount: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0
+  }).format(amount);
 }
 
 export function getProgress(collected: string, target: string): number {

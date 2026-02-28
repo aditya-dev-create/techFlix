@@ -5,26 +5,41 @@ import { CATEGORY_LABELS, CampaignCategory } from '@/types/campaign';
 import { Search, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useSocket } from '@/context/SocketContext';
+
 export default function Explore() {
   const { t } = useTranslation();
+  const { socket } = useSocket();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CampaignCategory | 'all'>('all');
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const load = async () => {
+    try {
+      const data = await fetchCampaigns();
+      setCampaigns(data);
+    } catch (err) {
+      console.error('Failed to load campaigns', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchCampaigns();
-        setCampaigns(data);
-      } catch (err) {
-        console.error('Failed to load campaigns', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     load();
   }, []);
+
+  useEffect(() => {
+    if (socket) {
+      socket.on('CAMPAIGN_UPDATED', load);
+      socket.on('NEW_DONATION', load);
+      return () => {
+        socket.off('CAMPAIGN_UPDATED', load);
+        socket.off('NEW_DONATION', load);
+      };
+    }
+  }, [socket]);
 
   const filtered = campaigns.filter(c => {
     const title = c.title || '';

@@ -7,7 +7,7 @@ export const getCampaigns = async (req: Request, res: Response) => {
         const campaigns = await prisma.campaign.findMany({
             include: {
                 ngo: true,
-                milestones: true,
+                milestones: { orderBy: { milestoneIndex: 'asc' } },
                 donations: true,
             },
             orderBy: {
@@ -24,6 +24,7 @@ export const getCampaigns = async (req: Request, res: Response) => {
 export const createCampaign = async (req: Request, res: Response) => {
     try {
         const { title, description, targetAmount, deadline, ngoId, milestones, blockchainId } = req.body;
+        const normalizedNgoId = ngoId.toLowerCase();
 
         // Basic validation
         if (!title || !description || !targetAmount || !deadline || !ngoId) {
@@ -32,10 +33,10 @@ export const createCampaign = async (req: Request, res: Response) => {
 
         // Dev Helper: Ensure the NGO/User exists for the given wallet
         const user = await prisma.user.upsert({
-            where: { wallet: ngoId },
+            where: { wallet: normalizedNgoId },
             update: {},
             create: {
-                wallet: ngoId,
+                wallet: normalizedNgoId,
                 role: 'NGO',
                 ngoProfile: {
                     create: {
@@ -62,9 +63,11 @@ export const createCampaign = async (req: Request, res: Response) => {
                 ngoId: user.ngoProfile.id, // Use the actual profile ID
                 blockchainId,
                 milestones: {
-                    create: milestones?.map((m: any) => ({
+                    create: milestones?.map((m: any, index: number) => ({
+                        milestoneIndex: index,
                         title: m.title,
                         amount: m.amount,
+                        requiredApprovals: m.requiredApprovals || 1
                     })) || [],
                 },
             },
@@ -87,7 +90,7 @@ export const getCampaignById = async (req: Request, res: Response) => {
             where: { id },
             include: {
                 ngo: true,
-                milestones: true,
+                milestones: { orderBy: { milestoneIndex: 'asc' } },
                 donations: {
                     include: {
                         user: true,
@@ -104,5 +107,69 @@ export const getCampaignById = async (req: Request, res: Response) => {
     } catch (error) {
         logger.error('Error fetching campaign:', error);
         res.status(500).json({ error: 'Failed to fetch campaign' });
+    }
+};
+export const releaseMilestone = async (req: Request, res: Response) => {
+    try {
+        const { id, milestoneIndex } = req.body;
+        const campaign = await prisma.campaign.findFirst({
+            where: { OR: [{ id }, { blockchainId: id.toString() }] },
+            include: { milestones: true, ngo: true }
+        });
+
+        if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+        const ms = campaign.milestones.find(m => m.milestoneIndex === milestoneIndex);
+        if (!ms) return res.status(404).json({ error: 'Milestone not found' });
+
+        const updated = await prisma.milestone.update({
+            where: { id: ms.id },
+            data: { fundsReleased: true, approved: true }
+        });
+
+        const updatedCampaign = await prisma.campaign.findUnique({
+            where: { id },
+            include: { milestones: { orderBy: { milestoneIndex: 'asc' } }, ngo: true }
+        });
+
+        // @ts-ignore
+        req.io.emit('CAMPAIGN_UPDATED', updatedCampaign);
+
+        res.json({ message: 'Milestone released (Virtual)', milestone: updated });
+    } catch (error) {
+        logger.error('Error releasing milestone:', error);
+        res.status(500).json({ error: 'Failed to release milestone' });
+    }
+};
+export const approveMilestoneVirtually = async (req: Request, res: Response) => {
+    try {
+        const { id, milestoneIndex } = req.body;
+        const campaign = await prisma.campaign.findFirst({
+            where: { OR: [{ id }, { blockchainId: id.toString() }] },
+            include: { milestones: true, ngo: true }
+        });
+
+        if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+        const ms = campaign.milestones.find(m => m.milestoneIndex === milestoneIndex);
+        if (!ms) return res.status(404).json({ error: 'Milestone not found' });
+
+        const updated = await prisma.milestone.update({
+            where: { id: ms.id },
+            data: { approved: true }
+        });
+
+        const updatedCampaign = await prisma.campaign.findUnique({
+            where: { id: campaign.id },
+            include: { milestones: { orderBy: { milestoneIndex: 'asc' } }, ngo: true }
+        });
+
+        // @ts-ignore
+        req.io.emit('CAMPAIGN_UPDATED', updatedCampaign);
+
+        res.json({ message: 'Milestone approved virtually', milestone: updated });
+    } catch (error) {
+        logger.error('Error approving milestone virtually:', error);
+        res.status(500).json({ error: 'Failed to approve milestone' });
     }
 };

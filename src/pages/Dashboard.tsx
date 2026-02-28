@@ -5,17 +5,19 @@ import CampaignCard from '@/components/CampaignCard';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
-import { formatEth } from '@/lib/web3Utils';
+import { formatAddress, formatEth, formatInr } from '@/lib/web3Utils';
 import { FUNDCHAIN_ABI, CONTRACT_ADDRESS } from '@/contracts/FundChain';
 import { useTranslation } from 'react-i18next';
 import {
   Wallet, TrendingUp, BarChart3, Activity, Loader2, AlertCircle, Plus,
   ExternalLink, Copy, Check, Sparkles, HandCoins, Zap
 } from 'lucide-react';
+import { useSocket } from '@/context/SocketContext';
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { address: userAddress, isConnected, isInitializing, balance, chainId, smilePoints, savingsBalance } = useWallet();
+  const { socket } = useSocket();
+  const { address: userAddress, isConnected, isInitializing, balance, chainId, smilePoints, savingsBalance, convertToInr } = useWallet();
   const [data, setData] = useState<any>(null);
   const [contractBalance, setContractBalance] = useState<string | null>(null);
   const [totalCampaigns, setTotalCampaigns] = useState<number | null>(null);
@@ -23,21 +25,34 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'donations'>('overview');
   const [copied, setCopied] = useState(false);
 
+  const load = async () => {
+    if (!userAddress) return;
+    const normalizedAddress = userAddress.toLowerCase();
+    setLoading(true);
+    try {
+      const result = await fetchDashboardData(normalizedAddress);
+      setData(result);
+    } catch (err) {
+      console.error('Failed to load dashboard', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      if (!userAddress) return;
-      setLoading(true);
-      try {
-        const result = await fetchDashboardData(userAddress);
-        setData(result);
-      } catch (err) {
-        console.error('Failed to load dashboard', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     load();
   }, [userAddress]);
+
+  useEffect(() => {
+    if (socket) {
+      socket.on('CAMPAIGN_UPDATED', load);
+      socket.on('NEW_DONATION', load);
+      return () => {
+        socket.off('CAMPAIGN_UPDATED', load);
+        socket.off('NEW_DONATION', load);
+      };
+    }
+  }, [socket]);
 
   // Fetch on-chain analytics
   useEffect(() => {
@@ -120,11 +135,19 @@ export default function Dashboard() {
     },
     {
       label: t('dashboard.savings') || 'Savings Wallet',
-      value: `$${(savingsBalance * 3500).toFixed(2)}`, // mocked conversion
+      value: `${savingsBalance} ETH`, // exact ETH generated from Smile Coins
       icon: <Wallet className="w-5 h-5" />,
       color: 'text-green-400',
       bg: 'bg-green-400/10',
       sub: 'Smile Points balance',
+    },
+    {
+      label: t('dashboard.released') || 'Released Funds',
+      value: `${data?.totalReleased || 0} ETH`,
+      icon: <Zap className="w-5 h-5" />,
+      color: 'text-indigo-400',
+      bg: 'bg-indigo-400/10',
+      sub: 'withdrawn/completed',
     },
     {
       label: t('dashboard.smilePoints') || 'Smile Points',
@@ -184,6 +207,7 @@ export default function Dashboard() {
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Wallet Balance</div>
             <div className="font-mono font-bold text-foreground">{balance ?? '—'} ETH</div>
+            <div className="text-[10px] text-muted-foreground">{convertToInr(balance ?? 0)}</div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Network</div>
@@ -192,6 +216,7 @@ export default function Dashboard() {
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Contract Balance</div>
             <div className="font-mono font-bold text-primary">{contractBalance ?? '—'} ETH</div>
+            <div className="text-[10px] text-primary/60">{convertToInr(contractBalance ?? 0)}</div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Total Campaigns On-Chain</div>
@@ -207,6 +232,7 @@ export default function Dashboard() {
                 {s.icon}
               </div>
               <div className={`text-2xl font-bold font-mono ${s.color}`}>{s.value}</div>
+              {s.label.includes('ETH') && <div className={`text-xs opacity-70 font-mono ${s.color}`}>{convertToInr(s.value.split(' ')[0])}</div>}
               <div className="text-sm font-medium text-foreground mt-0.5">{s.label}</div>
               <div className="text-xs text-muted-foreground">{s.sub}</div>
             </div>
